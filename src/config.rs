@@ -25,7 +25,6 @@ pub struct Config {
     pub server: ServerConfig,
     pub sequence: SequenceConfig,
     pub mysql: MysqlConfig,
-    pub redis: RedisConfig,
     pub log: log4rs::file::RawConfig,
 }
 
@@ -56,11 +55,6 @@ pub struct SequenceConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct MysqlConfig {
-    pub url: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct RedisConfig {
     pub url: String,
 }
 

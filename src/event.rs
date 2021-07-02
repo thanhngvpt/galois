@@ -401,12 +401,6 @@ fn do_inspect(inspection: Inspection, data: &Data) -> anyhow::Result<()> {
             server::publish(server::Message::with_payload(session, req_id, v));
         }
         Inspection::UpdateDepth => {
-            let writing = data
-                .orderbooks
-                .iter()
-                .map(|(k, v)| v.as_depth(32, *k))
-                .collect::<Vec<_>>();
-            output::write_depth(writing);
         }
         Inspection::ConfirmAll(from, exclude) => sequence::confirm(from, exclude),
     }

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use mysql::{prelude::*, *};
-use redis::Commands;
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 use std::convert::Into;
@@ -21,7 +20,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 
-use crate::{core::*, db::DB, db::REDIS, matcher::*, orderbook::AskOrBid, orderbook::Depth};
+use crate::{core::*, db::DB, matcher::*, orderbook::AskOrBid, orderbook::Depth};
 
 #[derive(Debug)]
 pub struct Output {
@@ -45,23 +44,6 @@ pub struct Output {
     pub base_frozen: Decimal,
     pub quote_available: Decimal,
     pub quote_frozen: Decimal,
-}
-
-pub fn write_depth(depth: Vec<Depth>) {
-    let redis = REDIS.get_connection();
-    match redis {
-        Ok(mut conn) => {
-            depth.iter().for_each(|d| {
-                let _: redis::RedisResult<()> = conn.set(
-                    format!("V2_DEPTH_L{}_{}_{}", d.depth, d.symbol.0, d.symbol.1),
-                    serde_json::to_string(d).unwrap(),
-                );
-            });
-        }
-        Err(_) => {
-            log::error!("connect redis failed");
-        }
-    }
 }
 
 pub fn init(sender: Sender<Vec<Output>>, recv: Receiver<Vec<Output>>) {
@@ -163,3 +145,4 @@ fn write(mut cr: Vec<Output>, buf: &mut HashMap<Symbol, (u64, Vec<Output>)>) {
         flush(symbol, &mut pending.1);
     }
 }
+
