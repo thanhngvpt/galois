@@ -19,6 +19,8 @@ use std::convert::Into;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
+use lru::LruCache;
+use lazy_static::lazy_static;
 
 use crate::{core::*, db::DB, matcher::*, orderbook::AskOrBid, orderbook::Depth};
 
@@ -46,14 +48,20 @@ pub struct Output {
     pub quote_frozen: Decimal,
 }
 
-pub fn init(sender: Sender<Vec<Output>>, recv: Receiver<Vec<Output>>) {
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct AccountKey {
+    user_id: u64,
+    currency: u64,
+}
+
+pub fn init(sender: Sender<Vec<Output>>, recv: Receiver<Vec<Output>>, mut account_id_cache: LruCache<AccountKey, String>) {
     let mut buf = HashMap::<Symbol, (u64, Vec<Output>)>::new();
     thread::spawn(move || loop {
         let cr = recv.recv().unwrap();
         if cr.is_empty() {
-            flush_all(&mut buf);
+            flush_all(&mut account_id_cache, &mut buf);
         } else {
-            write(cr, &mut buf);
+            write(&mut account_id_cache, cr, &mut buf);
         }
     });
     thread::spawn(move || loop {
@@ -77,7 +85,7 @@ fn get_max_record(symbol: Symbol) -> u64 {
     id.or(Some(0)).unwrap()
 }
 
-fn flush(symbol: Symbol, pending: &mut Vec<Output>) {
+fn flush(account_id_cache: &LruCache<AccountKey, String>, symbol: Symbol, pending: &mut Vec<Output>) {
     let sql = format!(
         "INSERT IGNORE INTO t_clearing_result_{}_{}(f_event_id,f_order_id,f_user_id,f_status,f_role,f_ask_or_bid,f_price,f_quote,f_base,f_quote_fee,f_base_fee,f_timestamp,best_size,best_price,base_available,base_frozen,quote_available,quote_frozen) VALUES (:event_id,:order_id,:user_id,:state,:role,:ask_or_bid,:price,:quote,:base,:quote_fee,:base_fee,FROM_UNIXTIME(:timestamp),:best_size,:best_price,:base_available,:base_frozen,:quote_available,:quote_frozen)",
         symbol.0, symbol.1
@@ -121,13 +129,13 @@ fn flush(symbol: Symbol, pending: &mut Vec<Output>) {
     }
 }
 
-fn flush_all(buf: &mut HashMap<Symbol, (u64, Vec<Output>)>) {
+fn flush_all(account_id_cache: &mut LruCache<AccountKey, String>, buf: &mut HashMap<Symbol, (u64, Vec<Output>)>) {
     for (symbol, pending) in buf.iter_mut() {
-        flush(*symbol, &mut pending.1);
+        flush(account_id_cache, *symbol, &mut pending.1);
     }
 }
 
-fn write(mut cr: Vec<Output>, buf: &mut HashMap<Symbol, (u64, Vec<Output>)>) {
+fn write(account_id_cache: &mut LruCache<AccountKey, String>, mut cr: Vec<Output>, buf: &mut HashMap<Symbol, (u64, Vec<Output>)>) {
     let symbol = cr.first().unwrap().symbol;
     let pending = buf.get_mut(&symbol);
     if pending.is_none() {
@@ -142,7 +150,33 @@ fn write(mut cr: Vec<Output>, buf: &mut HashMap<Symbol, (u64, Vec<Output>)>) {
     pending.0 = prepare_write_event_id;
     pending.1.append(&mut cr);
     if pending.1.len() >= 100 {
-        flush(symbol, &mut pending.1);
+        flush(account_id_cache, symbol, &mut pending.1);
     }
 }
 
+fn get_account_address_by_id(account_id_cache: &mut LruCache<AccountKey, String>, user_id: u64, currency: u64) -> Option<String> {
+    let key = AccountKey { user_id, currency };
+    let idOpt = account_id_cache.get(&key);
+
+    match idOpt {
+        Some(id) => {
+            Some((*id).clone())
+        }
+        None => {
+            let sql = format!(
+                "SELECT f_address from t_deposit_address where f_user_id = {} and f_currency_code = {}",
+                user_id, currency
+            );
+            let conn = DB.get_conn();
+            if conn.is_err() {
+                log::error!("Error: acquire mysql connection failed, {:?}", conn);
+                return None;
+            }
+            let mut conn = conn.unwrap();
+            let id: Option<String> = conn.query_first(sql).unwrap();
+            let id = id?;
+            account_id_cache.put(key.clone(), id.clone());
+            Some(id)
+        }
+    }
+}
