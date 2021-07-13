@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use galois::{config, event, output, sequence, server, snapshot};
+use galois::{config, event, output, sequence, server, snapshot, merkle_tree};
 
 use std::sync::{atomic, mpsc, Arc};
 
@@ -20,6 +20,10 @@ use lru::LruCache;
 use std::time::Duration;
 use std::thread;
 use output::AccountKey;
+use sparse_merkle_tree::{H256, SparseMerkleTree};
+use sparse_merkle_tree::blake2b::Blake2bHasher;
+use sparse_merkle_tree::traits::Value;
+use sparse_merkle_tree::default_store::DefaultStore;
 
 fn main() {
     print_banner();
@@ -34,6 +38,7 @@ fn main() {
     event::init(event_rx, output_tx, coredump);
     sequence::init(event_tx.clone(), id, ready.clone());
     server::init(event_tx, ready);
+    let mut tree: SparseMerkleTree<Blake2bHasher, Value, DefaultStore<Value>> = sparse_merkle_tree::SparseMerkleTree::default();
 
     loop {
         thread::sleep(Duration::from_millis(100));

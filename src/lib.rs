@@ -32,3 +32,4 @@ pub mod output;
 pub mod sequence;
 pub mod server;
 pub mod snapshot;
+pub mod merkle_tree;
