@@ -14,88 +14,57 @@ use sha2::{Sha256, Sha512, Digest};
 use rust_decimal::Decimal;
 use chrono::format::Pad::Zero;
 
-#[derive(Clone)]
-pub struct TapeValue { size: Amount, best: Price }
-
-impl Value for TapeValue {
-    fn to_h256(&self) -> H256 {
-        if self.size == Decimal::ZERO {
-            return H256::zero();
-        }
-
-        let mut buf = [0u8; 32];
-        let mut hasher = new_blake2b();
-        let size = self.size.normalize().to_string();
-        let size = size.as_bytes();
-        hasher.update(size);
-        let best = self.best.normalize().to_string();
-        let best = best.as_bytes();
-        hasher.update(best);
-        hasher.finalize(&mut buf);
-        buf.into()
+pub fn genTapeValue(size: Amount, best: Price) -> H256 {
+    if size == Decimal::ZERO {
+        return H256::zero();
     }
 
-    fn zero() -> Self {
-        TapeValue { size: Default::default(), best: Default::default() }
-    }
+    let mut buf = [0u8; 32];
+    let mut hasher = new_blake2b();
+    let size = size.normalize().to_string();
+    let size = size.as_bytes();
+    hasher.update(size);
+    let best = best.normalize().to_string();
+    let best = best.as_bytes();
+    hasher.update(best);
+    hasher.finalize(&mut buf);
+    buf.into()
 }
 
-#[derive(Clone)]
-pub struct OrderValue { owner: H256, amount: Amount, price: Price, ask_or_bid: u32 }
-
-impl Value for OrderValue {
-    fn to_h256(&self) -> H256 {
-        let mut buf = [0u8; 32];
-        let mut hasher = new_blake2b();
-        hasher.update(self.owner.as_slice());
-        let amount = self.amount.normalize().to_string();
-        let amount = amount.as_bytes();
-        hasher.update(amount);
-        let price = self.price.normalize().to_string();
-        let price = price.as_bytes();
-        hasher.update(price);
-        let ot: u32 = self.ask_or_bid.into();
-        let t = ot.to_ne_bytes();
-        hasher.update(&t);
-        hasher.finalize(&mut buf);
-        buf.into()
-    }
-
-    fn zero() -> Self {
-        OrderValue {
-            owner: H256::zero(),
-            amount: Default::default(),
-            price: Default::default(),
-            ask_or_bid: Default::default(),
-        }
-    }
+pub fn genOrderValue(owner: H256, amount: Amount, price: Price, ask_or_bid: AskOrBid) {
+    let mut buf = [0u8; 32];
+    let mut hasher = new_blake2b();
+    hasher.update(owner.as_slice());
+    let amount = amount.normalize().to_string();
+    let amount = amount.as_bytes();
+    hasher.update(amount);
+    let price = price.normalize().to_string();
+    let price = price.as_bytes();
+    hasher.update(price);
+    let ot: u32 = ask_or_bid.into();
+    let ot = ot + 2;
+    let t = ot.to_ne_bytes();
+    hasher.update(&t);
+    hasher.finalize(&mut buf);
+    buf.into()
 }
 
-#[derive(Clone)]
-pub struct AccountValue { tradable: Decimal, frozen: Decimal }
-
-impl Value for AccountValue {
-    fn to_h256(&self) -> H256 {
-        if self.tradable == Decimal::ZERO && self.frozen == Decimal::ZERO {
-            return H256::zero();
-        }
-
-        let mut buf = [0u8; 32];
-        let mut hasher = new_blake2b();
-
-        let tradable = self.tradable.normalize().to_string();
-        let tradable = tradable.as_bytes();
-        hasher.update(tradable);
-        let frozen = self.frozen.normalize().to_string();
-        let frozen = frozen.as_bytes();
-        hasher.update(frozen);
-        hasher.finalize(&mut buf);
-        buf.into()
+pub fn genAccountValue(tradable: Decimal, frozen: Decimal) -> H256 {
+    if tradable == Decimal::ZERO && frozen == Decimal::ZERO {
+        return H256::zero();
     }
 
-    fn zero() -> Self {
-        AccountValue { tradable: Default::default(), frozen: Default::default() }
-    }
+    let mut buf = [0u8; 32];
+    let mut hasher = new_blake2b();
+
+    let tradable = tradable.normalize().to_string();
+    let tradable = tradable.as_bytes();
+    hasher.update(tradable);
+    let frozen = frozen.normalize().to_string();
+    let frozen = frozen.as_bytes();
+    hasher.update(frozen);
+    hasher.finalize(&mut buf);
+    buf.into()
 }
 
 const BLAKE2B_KEY: &[u8] = &[];
