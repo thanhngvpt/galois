@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use galois::{config, event, output, sequence, server, snapshot, merkle_tree};
+use galois::{config, event, output, sequence, snapshot, merkle_tree};
 
 use std::sync::{atomic, mpsc, Arc};
 
@@ -38,7 +38,6 @@ fn main() {
     output::init(output_tx.clone(), output_rx, account_id_cache);
     event::init(event_rx, output_tx, coredump);
     sequence::init(event_tx.clone(), id, ready.clone());
-    server::init(event_tx, ready);
     let mut tree: SparseMerkleTree<Blake2bHasher, ProofValue, DefaultStore<ProofValue>> = sparse_merkle_tree::SparseMerkleTree::default();
     merkle_tree::init(&mut tree);
 

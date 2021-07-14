@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::{
-    assets, clearing, core::*, matcher::*, orderbook::*, output, sequence, server, snapshot,
+    assets, clearing, core::*, matcher::*, orderbook::*, output, sequence, snapshot,
 };
 use rust_decimal::{prelude::Zero, Decimal};
 use serde::{Deserialize, Serialize};
@@ -161,26 +161,9 @@ pub fn init(recv: Receiver<sequence::Fusion>, sender: Sender<Vec<output::Output>
             let fusion = recv.recv().unwrap();
             match fusion {
                 // come from request or inner counter
-                sequence::Fusion::R(watch) => {
-                    if !watch.cmd.validate() {
-                        log::info!("illegal request {:?}", watch);
-                        server::publish(server::Message::with_payload(
-                            watch.session,
-                            watch.req_id,
-                            vec![],
-                        ));
-                        continue;
-                    }
-                    let inspection = watch
-                        .to_inspection()
-                        .ok_or_else(|| anyhow::anyhow!("Watch::to_inspection error"))?;
-
-                    do_inspect(inspection, &data)?;
-                }
                 sequence::Fusion::W(seq) => {
                     if !seq.cmd.validate() {
                         log::info!("illegal sequence {:?}", seq);
-                        sequence::update_sequence_status(seq.id, sequence::ERROR);
                         continue;
                     }
                     let event = seq
@@ -190,7 +173,6 @@ pub fn init(recv: Receiver<sequence::Fusion>, sender: Sender<Vec<output::Output>
                     let (_, ok) = handle_event(event, &mut data, &sender);
                     if !ok {
                         log::info!("execute sequence {:?} failed", seq);
-                        sequence::update_sequence_status(seq.id, sequence::ERROR);
                     }
                 }
             }
@@ -364,47 +346,6 @@ fn handle_event(
             (u64::MAX, true)
         }
     }
-}
-
-fn do_inspect(inspection: Inspection, data: &Data) -> anyhow::Result<()> {
-    match inspection {
-        Inspection::QueryOrder(symbol, order_id, session, req_id) => {
-            match data.orderbooks.get(&symbol) {
-                Some(orderbook) => {
-                    let v = match orderbook.find_order(order_id) {
-                        Some(order) => serde_json::to_vec(order).unwrap_or_default(),
-                        None => vec![],
-                    };
-                    server::publish(server::Message::with_payload(session, req_id, v));
-                }
-                None => {
-                    server::publish(server::Message::with_payload(session, req_id, vec![]));
-                }
-            }
-        }
-        Inspection::QueryBalance(user_id, currency, session, req_id) => {
-            let v = match assets::get(&data.accounts, user_id, currency) {
-                None => serde_json::to_vec(&assets::Account {
-                    available: Decimal::new(0, 0),
-                    frozen: Decimal::new(0, 0),
-                })
-                .unwrap(),
-                Some(a) => serde_json::to_vec(a)?,
-            };
-            server::publish(server::Message::with_payload(session, req_id, v));
-        }
-        Inspection::QueryAccounts(user_id, session, req_id) => {
-            let v = match data.accounts.get(&user_id) {
-                None => serde_json::to_vec(&Accounts::new())?,
-                Some(all) => serde_json::to_vec(all)?,
-            };
-            server::publish(server::Message::with_payload(session, req_id, v));
-        }
-        Inspection::UpdateDepth => {
-        }
-        Inspection::ConfirmAll(from, exclude) => sequence::confirm(from, exclude),
-    }
-    Ok(())
 }
 
 #[test]

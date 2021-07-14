@@ -174,94 +174,6 @@ impl Sequence {
 }
 
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
-pub struct Watch {
-    pub session: u64,
-    pub req_id: u64,
-    pub cmd: Command,
-}
-
-impl Watch {
-    pub fn to_inspection(&self) -> Option<Inspection> {
-        match self.cmd.cmd {
-            QUERY_ORDER => Some(Inspection::QueryOrder(
-                self.cmd.symbol()?,
-                self.cmd.order_id?,
-                self.session,
-                self.req_id,
-            )),
-            QUERY_BALANCE => Some(Inspection::QueryBalance(
-                self.cmd.user_id?,
-                self.cmd.currency?,
-                self.session,
-                self.req_id,
-            )),
-            QUERY_ACCOUNTS => Some(Inspection::QueryAccounts(
-                self.cmd.user_id?,
-                self.session,
-                self.req_id,
-            )),
-            UPDATE_DEPTH => Some(Inspection::UpdateDepth),
-            CONFIRM_ALL => Some(Inspection::ConfirmAll(self.cmd.from?, self.cmd.exclude?)),
-            _ => unreachable!(),
-        }
-    }
-
-    pub const fn new_update_depth_watch() -> Self {
-        Self {
-            session: 0,
-            req_id: 0,
-            cmd: Command {
-                cmd: UPDATE_DEPTH,
-                order_id: None,
-                user_id: None,
-                base: None,
-                quote: None,
-                currency: None,
-                vol: None,
-                amount: None,
-                price: None,
-                base_scale: None,
-                quote_scale: None,
-                taker_fee: None,
-                maker_fee: None,
-                min_amount: None,
-                min_vol: None,
-                enable_market_order: None,
-                from: None,
-                exclude: None,
-            },
-        }
-    }
-
-    pub const fn new_confirm_watch(from: u64, exclude: u64) -> Self {
-        Self {
-            session: 0,
-            req_id: 0,
-            cmd: Command {
-                cmd: CONFIRM_ALL,
-                order_id: None,
-                user_id: None,
-                base: None,
-                quote: None,
-                currency: None,
-                vol: None,
-                amount: None,
-                price: None,
-                base_scale: None,
-                quote_scale: None,
-                taker_fee: None,
-                maker_fee: None,
-                min_amount: None,
-                min_vol: None,
-                enable_market_order: None,
-                from: Some(from),
-                exclude: Some(exclude),
-            },
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
 pub struct Command {
     pub cmd: u32,
     order_id: Option<u64>,
@@ -286,7 +198,6 @@ pub struct Command {
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
 pub enum Fusion {
     W(Sequence),
-    R(Watch),
 }
 
 unsafe impl Send for Sequence {}
@@ -408,15 +319,7 @@ pub fn init(sender: Sender<Fusion>, id: u64, startup: Arc<AtomicBool>) {
                 }
                 id += 1;
             }
-            event_sender
-                .send(Fusion::R(Watch::new_confirm_watch(from, id)))
-                .unwrap();
         }
-    });
-    thread::spawn(move || loop {
-        thread::sleep(Duration::from_millis(500));
-        let watch = Watch::new_update_depth_watch();
-        sender.send(Fusion::R(watch)).unwrap();
     });
 }
 
@@ -462,28 +365,6 @@ pub fn insert_nop(id: u64) -> Option<bool> {
             None
         }
     }
-}
-
-pub fn update_sequence_status(id: u64, status: u32) {
-    let sql = "UPDATE t_sequence SET f_status=? WHERE f_id=?";
-    let conn = DB.get_conn();
-    if conn.is_err() {
-        log::error!("retrieve mysql connection failed while update_sequence_status");
-        return;
-    }
-    let mut conn = conn.unwrap();
-    let _ = conn.exec_drop(sql, (status, id));
-}
-
-pub fn confirm(from: u64, exclude: u64) {
-    let sql = "UPDATE t_sequence SET f_status=? WHERE f_status=? AND f_id>=? AND f_id<?";
-    let conn = DB.get_conn();
-    if conn.is_err() {
-        log::error!("retrieve mysql connection failed while update_sequence_status");
-        return;
-    }
-    let mut conn = conn.unwrap();
-    let _ = sql.with((ACCEPTED, PENDING, from, exclude)).run(&mut conn);
 }
 
 pub const PENDING: u32 = 0;
