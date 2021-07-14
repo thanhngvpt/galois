@@ -31,7 +31,7 @@ pub fn genTapeValue(size: Amount, best: Price) -> H256 {
     buf.into()
 }
 
-pub fn genOrderValue(owner: H256, amount: Amount, price: Price, ask_or_bid: AskOrBid) {
+pub fn genOrderValue(owner: H256, amount: Amount, price: Price, ask_or_bid: AskOrBid) -> H256 {
     let mut buf = [0u8; 32];
     let mut hasher = new_blake2b();
     hasher.update(owner.as_slice());
@@ -117,3 +117,24 @@ fn gen_order_id_key(id: OrderId) -> H256 {
     hasher.finalize(&mut buf);
     buf.into()
 }
+
+
+pub struct ProofValue(H256);
+
+impl Value for ProofValue {
+    fn to_h256(&self) -> H256 {
+        self.0.clone()
+    }
+
+    fn zero() -> Self {
+        ProofValue(H256::zero())
+    }
+}
+
+impl Default for ProofValue {
+    fn default() -> Self {
+        ProofValue(H256::zero())
+    }
+}
+
+pub fn init(tree: &mut SparseMerkleTree<Blake2bHasher, ProofValue, DefaultStore<ProofValue>>) {}

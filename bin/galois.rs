@@ -24,6 +24,7 @@ use sparse_merkle_tree::{H256, SparseMerkleTree};
 use sparse_merkle_tree::blake2b::Blake2bHasher;
 use sparse_merkle_tree::traits::Value;
 use sparse_merkle_tree::default_store::DefaultStore;
+use galois::merkle_tree::ProofValue;
 
 fn main() {
     print_banner();
@@ -38,7 +39,8 @@ fn main() {
     event::init(event_rx, output_tx, coredump);
     sequence::init(event_tx.clone(), id, ready.clone());
     server::init(event_tx, ready);
-    let mut tree: SparseMerkleTree<Blake2bHasher, Value, DefaultStore<Value>> = sparse_merkle_tree::SparseMerkleTree::default();
+    let mut tree: SparseMerkleTree<Blake2bHasher, ProofValue, DefaultStore<ProofValue>> = sparse_merkle_tree::SparseMerkleTree::default();
+    merkle_tree::init(&mut tree);
 
     loop {
         thread::sleep(Duration::from_millis(100));
