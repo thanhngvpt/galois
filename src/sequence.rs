@@ -287,18 +287,7 @@ pub fn init(sender: Sender<Fusion>, id: u64, startup: Arc<AtomicBool>) {
             for s in seq.into_iter() {
                 // found break point
                 if id != s.id {
-                    log::info!("expecting {}, but {} found", id, s.id);
-                    let rs = insert_nop(id);
-                    match rs {
-                        // it means sequence rollback, {id} is void, adjust id = id + 1
-                        Some(true) => {
-                            id += 1;
-                        }
-                        // it means sequence commit, abort current batch and retry
-                        Some(false) => {}
-                        // other error
-                        None => {}
-                    }
+                    log::info!("expecting {}, but {} found, retry", id, s.id);
                     break;
                 }
                 if s.rejected() {
@@ -342,29 +331,7 @@ fn fetch_sequence_from(id: u64) -> Vec<Sequence> {
             timestamp: f_timestamp,
         },
     )
-    .unwrap_or_default()
-}
-
-pub fn insert_nop(id: u64) -> Option<bool> {
-    let sql = "INSERT INTO t_sequence(f_id,f_cmd,f_status) VALUES(?,?,?)";
-    let conn = DB.get_conn();
-    if conn.is_err() {
-        log::error!("retrieve mysql connection failed while insert_nop");
-        return None;
-    }
-    let mut conn = conn.unwrap();
-    match conn.exec_drop(sql, (id, r#"{"cmd":999999}"#, ERROR)) {
-        Ok(()) => Some(true),
-        Err(err) => {
-            if let mysql::error::Error::MySqlError(e) = err {
-                // FIXME better way to determine duplicated entry
-                if e.code == 1062 && e.message.contains("Duplicate entry") {
-                    return Some(false);
-                }
-            }
-            None
-        }
-    }
+        .unwrap_or_default()
 }
 
 pub const PENDING: u32 = 0;
