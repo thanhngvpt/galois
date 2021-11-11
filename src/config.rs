@@ -146,9 +146,9 @@ pub fn test_default() {
 [server]
 bind_addr = "127.0.0.1:8097"
 [mysql]
-url = "mysql://username:password@localhost:3306/galois"
+url = "mysql://galois:example@127.0.0.1:3308/galois"
 [redis]
-url = "redis://localhost:6379/0"
+url = "redis://localhost:6371/0"
 [sequence]
 checkpoint = 100000
 coredump_dir = "/tmp/snapshot"
